@@ -1,0 +1,52 @@
+:root {
+  --bg: #05060c;
+  --bg-soft: #0b0e1a;
+  --panel: rgba(10, 14, 26, 0.78);
+  --panel-solid: #0a0e1a;
+  --line: rgba(0, 229, 255, 0.28);
+  --line-soft: rgba(120, 160, 220, 0.16);
+  --cyan: #00e5ff;
+  --magenta: #ff2e88;
+  --amber: #ffb020;
+  --lime: #8dff4a;
+  --text: #d8e6ff;
+  --text-dim: #7d8db0;
+  --font-display: 'Rajdhani', 'Chakra Petch', 'Eurostile', 'Bank Gothic', 'Arial Narrow', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Roboto Mono', ui-monospace, Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--magenta);
+  color: #08090f;
+}
