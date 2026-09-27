@@ -1,48 +1,74 @@
 # NEURAL//RACE
 
-NEURAL//RACE is a browser based 3D circuit racing game built for a college hackathon project. Drive a player controlled car around a futuristic circuit, race two computer controlled opponents, and review your finish and driving profile after the race.
+A browser-based 3D circuit racing game. Three laps, two AI rivals, and a
+post-race **Driver DNA** report that scores how you actually drove — not just
+where you finished.
+
+Built as a college hackathon project with React 19, Three.js and React Three
+Fiber.
 
 ## Features
 
-- 3D race scene rendered with React Three Fiber and Three.js
-- Keyboard driving controls with acceleration, braking/reverse, steering, and handbrake drifting
-- One player car and two AI opponents
-- Three lap race with ordered checkpoint progress and live position tracking
-- Countdown before the race begins
-- Heads up display for speed, lap, elapsed time, position, route indicator, and controls
-- Minimap showing the circuit and the cars
-- Procedurally composed environment with sky, terrain, trees, buildings, lamps, and grandstands
-- Results screen with finish time, finishing position, and six calculated Driver DNA scores
-- Restart race and return to the main menu options
+- **3D race scene** rendered with React Three Fiber and Three.js.
+- **Keyboard driving** — accelerate, brake/reverse, steer, and handbrake drifting.
+- **One player car and two AI opponents** racing the same circuit.
+- **Three-lap race** with ordered checkpoint progress and live position tracking.
+- **Countdown** before the race start.
+- **HUD** showing speed, lap, elapsed time, position, the route indicator and a
+  controls reminder.
+- **Minimap** showing the circuit and every car on it.
+- **Procedurally composed environment** — sky, stars, terrain, trees, buildings,
+  track lamps and grandstands, all generated at load time from a seeded PRNG.
+- **Results screen** with finish time, finishing position and six calculated
+  Driver DNA scores: speed, risk, precision, drift, aggression and consistency.
+- **Restart the race** or return to the main menu from the results screen.
 
 ## Tech stack
 
-- React 19
-- Three.js
-- React Three Fiber
-- Drei
-- Webpack and webpack-dev-server
-- Babel
+| Layer    | Choice                                    |
+| -------- | ----------------------------------------- |
+| UI       | React 19                                  |
+| 3D       | Three.js, React Three Fiber, Drei          |
+| Bundler  | Webpack 5 + webpack-dev-server            |
+| Transpile| Babel (`preset-env`, `preset-react`)      |
+
+No game engine, no physics library and no 3D assets: the circuit, the car
+models, the scenery and all the textures are generated in code.
 
 ## Controls
 
-| Key | Action |
-| --- | --- |
-| `W` or `↑` | Accelerate |
-| `S` or `↓` | Brake / reverse |
-| `A` or `←` | Steer left |
-| `D` or `→` | Steer right |
-| `Space` | Handbrake / drift |
+| Action              | Keys            |
+| ------------------- | --------------- |
+| Accelerate          | `W` / `↑`       |
+| Brake / reverse     | `S` / `↓`       |
+| Steer left          | `A` / `←`       |
+| Steer right         | `D` / `→`       |
+| Handbrake / drift   | `Space`         |
 
 ## Gameplay
 
-Choose **Start Race** from the main menu. A short `3`, `2`, `1`, `GO!` countdown leads into the race. Complete three laps by driving through the circuit checkpoints in order. Your position is ranked against two AI cars using checkpoint and lap progress.
+1. Pick **Start Race** on the main menu.
+2. Wait out the `3` · `2` · `1` · `GO!` countdown.
+3. Complete **3 laps**, passing all 20 checkpoints in order — a missed gate does
+   not count the lap.
+4. Your position is ranked continuously against the two AI cars by checkpoint
+   and lap progress.
+5. Crossing the line for the third time opens the **results screen**: finish
+   time, final position, best lap, the full classification, a telemetry summary
+   and your **Driver DNA** profile with a driver archetype.
+6. Choose **Race Again** or **Main Menu**.
 
-When the player finishes, the results screen shows the finish time and position. It also displays Driver DNA scores for speed, risk, precision, drift, aggression, and consistency, calculated from race telemetry. Select **Race Again** to restart or **Main Menu** to return to the title screen.
+### The split
+
+One corner offers two lines. The **cyan SAFE lane** is the long way round with
+full grip. The **magenta RISK lane** cuts across the inside: it is 13 m shorter,
+it feeds you a boost pad, but the surface is slippery and it will not forgive a
+sloppy entry. The HUD route indicator shows which one you committed to, and each
+AI car has its own preference.
 
 ## Project structure
 
-```text
+```
 src/
 ├── App.jsx                    # Menu, countdown, race, and results flow
 ├── main.jsx                   # React application entry point
@@ -69,41 +95,64 @@ src/
 
 ## Architecture
 
-`App.jsx` controls the high-level menu, countdown, racing, and results states. During a race, `Game.jsx` mounts the React Three Fiber canvas and combines the track, environment, cars, and follow camera. `CarControls.js` maintains keyboard input, while `CarPhysics.js` updates the player car state. The race loop passes car positions to `RaceManager.jsx`, which tracks checkpoint and lap progress and determines player position. The HTML HUD and minimap read the live race state. Once the player finishes, telemetry is converted into Driver DNA scores and passed to the results screen.
+The circuit is generated as a **star-shaped radial loop**: a radius is defined at
+every 20° around the origin and a closed Catmull-Rom curve is fitted through
+those points. Because the radius is single-valued in angle, the centreline can
+never self-intersect, which is what makes the procedurally widened split safe to
+build. From that curve the track module derives per-sample tangents, normals,
+curvature, a racing line, barrier walls, 20 checkpoints and the start grid.
+
+Cars run on an **arcade slip-angle model**. Steering rotates the heading first,
+then velocity is decomposed into the new forward/lateral basis; lateral grip
+bleeds the slip off exponentially, and the handbrake trades that grip for extra
+yaw authority. Yaw rate is capped by a **grip circle** (`grip × lateral limit ÷
+speed`), so corners have a real speed limit and understeer is reported back to
+the car mesh and the AI planner.
+
+The AI plans against the same grip budget the physics enforces. It scans ~72 m
+of curvature ahead, computes the speed each corner can be taken at, and brakes
+to the tightest constraint it can still reach. It aims at a lookahead point on
+the racing line, biased by its own skill, aggression and route preference, and
+steers around traffic it detects in a forward cone.
+
+Race state lives in a **mutable per-frame model** (`race.gates`, `race.progress`)
+that never touches React. A director component runs last in the frame loop,
+ranks the field, records telemetry, and publishes a plain snapshot to React at
+**16 Hz** — so the HTML HUD and minimap stay cheap while the scene renders at
+60 fps. Checkpoint progress is measured in *gates crossed plus fractional
+distance to the next gate*, which stays continuous across the start/finish line
+instead of resetting each lap.
 
 ## Run locally
 
-### Requirements
-
-- Node.js and npm
-
-### Install and start
-
 ```bash
-git clone <repository-url>
-cd neural-race
-npm ci
-npm run dev
+npm ci        # or npm install
+npm run dev   # webpack-dev-server on http://localhost:3000
 ```
 
-Open the local URL printed by webpack-dev-server in your browser.
-
-To create a production build:
+Production build:
 
 ```bash
-npm run build
+npm run build # emits to dist/
 ```
-
-The build output is written to `dist/`.
 
 ## Possible future improvements
 
-- Complete and connect the safe/risk route fork to the rendered track and race logic
-- Add collision handling and clearer off-track recovery
-- Improve AI race behavior and finish-time ranking
-- Add audio, mobile controls, accessibility options, and persistent best times
-- Add automated gameplay and build checks
+- **Collision handling between cars.** Barriers are soft and push the car back
+  onto the track, but the cars currently pass through each other. Real
+  car-to-car contact and an off-track recovery flow would add a lot.
+- **Richer AI behaviour.** Personality currently comes from skill, aggression,
+  route preference and a lateral bias. Rubber-banding, defending a position, and
+  choosing a line around slower traffic would make the field feel alive.
+- **Audio and feel.** No engine, tyre or impact sound yet, and no controller
+  support, screen-reader labels or reduced-motion fallback.
+- **Persistent best times.** Lap records and a personal best across sessions
+  (localStorage) would give the Driver DNA report something to beat.
+- **Automated checks.** There is no test suite or CI. The physics, track
+  geometry and race loop are all pure modules that are easy to unit test, and
+  the circuit generation could be property-tested for self-intersection.
 
 ## Credits
 
-Created as a college hackathon project. Update this section with the team members, event, and any asset credits before submission.
+Created as a college hackathon project. Update this section with the team
+members, event, and any asset credits before submission.
